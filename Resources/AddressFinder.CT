@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CheatTable CheatEngineTableVersion="42">
+  <CheatEntries>
+    <CheatEntry>
+      <ID>34</ID>
+      <Description>"Find offsets"</Description>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>{$lua}
+if syntaxcheck then return end
+
+[ENABLE]
+
+function aobScamEx(entry, baseAddress)
+    local aob = AOBScan(entry.sig, "+X*C*W")
+    if not aob or aob.Count == 0 then return nil end
+
+    local instr = getAddressSafe(aob[0])
+    if not instr then return nil end
+
+    local displacement = readInteger(instr + entry.dispOffset)
+    local resolved = (instr + entry.instrSize) + displacement
+    return resolved - baseAddress
+end
+
+local aobEntries = {
+      { name = "TimerBase", sig = "C5 F8 11 0D ?? ?? ?? ?? C5 F8 77 E8 ?? ?? ?? ?? 49 8B C5 48 8B 8D ?? ?? ?? ??", dispOffset = 4, instrSize = 8 },
+      { name = "TasksManager", sig = "48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 ?? E8 ?? ?? ?? ?? 48 8B C8", dispOffset = 3, instrSize = 7 },
+      { name = "MainMenuFlag", sig = "C6 05 ?? ?? ?? ?? 01 C3 CC CC CC CC CC CC CC CC C6 05 ?? ?? ?? ?? 00", dispOffset = 2, instrSize = 7 }
+}
+
+local xbase = readInteger(process) and GetAddress(process)
+print(string.format("Base: %X", xbase))
+print("***********************************************************************")
+
+for i, entry in ipairs(aobEntries) do
+    local address = aobScamEx(entry, xbase)
+    print(string.format("%s: %s+%X", entry.name, process, address))
+end
+
+[DISABLE]
+
+</AssemblerScript>
+    </CheatEntry>
+  </CheatEntries>
+  <UserdefinedSymbols/>
+</CheatTable>
