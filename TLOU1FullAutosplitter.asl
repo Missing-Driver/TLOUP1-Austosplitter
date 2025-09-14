@@ -3,27 +3,18 @@
     // TimerBase: C5 F8 11 0D ?? ?? ?? ?? C5 F8 77 E8 ?? ?? ?? ?? 49 8B C5 48 8B 8D ?? ?? ?? ??
     // MainMenuFlag: C6 05 ?? ?? ?? ?? 01 C3 CC CC CC CC CC CC CC CC C6 05 ?? ?? ?? ?? 00
 
-    // Timer:
-    // TimerBase, 0x40, 0x488, 0xB38;  // first position
-    // TimerBase, 0x40, 0x488, 0xB48; // second position
-    // TimerBase, 0x40, 0x488, 0xB58; // third position
-    // TimerBase, 0x40, 0x488, 0xB68; // fourth position
+    // Timer [64 bytes divided in 4 positions of 16 bytes (p1, p2, p3 and p4)]:
+    // TimerBase, 0x40, 0x488, 0xB38;
     // Task ID:
     // TaskManager, 0x80:
 
 state("tlou-i", "v1.1.4.0-Steam"){
-    byte p1 : 0x067F4478, 0x40, 0x488, 0xB38; // In-game timer position 1
-    byte p2 : 0x067F4478, 0x40, 0x488, 0xB48; // In-game timer position 2
-    byte p3 : 0x067F4478, 0x40, 0x488, 0xB58; // In-game timer position 3
-    byte p4 : 0x067F4478, 0x40, 0x488, 0xB68; // In-game timer position 4
+    byte timer : 0x067F4478, 0x40, 0x488, 0xB38; // In-game timer
     string52 task : 0x6427ED0, 0x80; // Task ID string
     byte isMainMenu : 0x35D8CE8; // Menu boolean flag
 }
 state("tlou-i", "v1.1.5.0-Steam"){
-    byte p1 : 0x67FFDE8, 0x40, 0x488, 0xB38; // In-game timer position 1
-    byte p2 : 0x67FFDE8, 0x40, 0x488, 0xB48; // In-game timer position 2
-    byte p3 : 0x67FFDE8, 0x40, 0x488, 0xB58; // In-game timer position 3
-    byte p4 : 0x67FFDE8, 0x40, 0x488, 0xB68; // In-game timer position 4
+    byte64 timer : 0x67FFDE8, 0x40, 0x488, 0xB38; // In-game timer
     string52 task : 0x6433150, 0x80; // Task ID string
     byte isMainMenu : 0x35E2CE8; // Menu boolean flag
 }
@@ -33,6 +24,8 @@ startup{
     vars.Funcs = new ExpandoObject();
     // Contains a copy of the previous time:
     vars.oldTime = new TimeSpan(0, 0, 0, 0, 0);
+    // Contains the current time:
+    vars.curTime = new TimeSpan(0, 0, 0, 0, 0);
     // Keeps track of which checkpoints already caused a split:
     vars.splitted = new HashSet<string>();
 
@@ -79,7 +72,8 @@ startup{
                     // The slums
                     {"mil-tess-market-b", "Brive cutscene", "When the brive cutscene starts playing", "mg_quarantine", true},
                     {"mil-city-melee-tutorial-igc", "The slums 1st encounter start", "When the unskipable cutscene starts playing", "mg_quarantine", true},
-                    {"mil-city-over-the-fence", "The slums 1st encounter end", "After killing the smugglers", "mg_quarantine", true},
+                    {"mil-city-over-the-fence", "The slums 1st encounter end", "After killing the first smugglers", "mg_quarantine", true},
+                    {"mil-city-dock-warehouse-exit", "The slums 3rd encounter end", "After killing the smugglers inside the warehouse, before the lift gate", "mg_quarantine", true},
                     {"mil-escape-alley", "The slums completion", "After skipping Robert's final cutscene", "mg_quarantine", true},
                     // The cargo
                     {"out-wasteland-elevator", "The cargo  completion", "After reaching the meeting point, after skipping the cutscene", "mg_quarantine", true},
@@ -233,6 +227,10 @@ init{
     }
 }
 
+update{
+    print(current.task);
+}
+
 isLoading{
     // No need, the timer follows the in game Timer for GameTime, and for RTA it doesn't matter at all.
 }
@@ -241,11 +239,13 @@ start{
     return // Start the timer if:
         settings.ContainsKey(current.task + "-start") && // the current segment is a valid starting point,
         settings[current.task + "-start"] && // this starting point was selected by the user in the settings,
-        (current.p1 + current.p2 + current.p3 + current.p4 == 0); // and the in-game timer is 00:00:00.0
+        (current.timer[0] + current.timer[16] + current.timer[32] + current.timer[48] == 0) // the in-game timer is 00:00:00.0
+        && current.isMainMenu == 0; // and we are not in  the main menu
 }
 
 // Pegs the LiveSplit GameTime timer to the game's IGT.
 // Timer is trated as a stack of 4 slots in memory (p1, p2, p3 and p4)
+// [64 bytes divided in 4 positions of 16 bytes]
 // in which the left most value is the highest time.
 // Example times:
 //      p1  p2  p3  p4
@@ -258,13 +258,20 @@ gameTime{
     // The game "knows" what the depth of the stack is, we don't.
     // 01  00  00  00 could be eiter 100 milliseconds or 1:00:00.00 (one hour).
     // However, since the first value in changing is the miliseconds position, we can determine the correct time with it:
-    if (current.p4 != old.p4) vars.oldTime = new TimeSpan(0, current.p1, current.p2, current.p3, current.p4 * 100); // Above 1 hour
-    else if (current.p3 != old.p3) vars.oldTime = new TimeSpan(0, 0, current.p1, current.p2, current.p3 * 100); // Under 1 hour
-    else if (current.p2 != old.p2) vars.oldTime = new TimeSpan(0, 0, 0, current.p1, current.p2 * 100); // Under 1 minute
+    if (current.timer[48] != old.timer[48]) vars.curTime = new TimeSpan(0, current.timer[0], current.timer[16], current.timer[32], current.timer[48] * 100); // Above 1 hour
+    else if (current.timer[32] != old.timer[32]) vars.curTime = new TimeSpan(0, 0, current.timer[0], current.timer[16], current.timer[32] * 100); // Under 1 hour
+    else if (current.timer[16] != old.timer[16]) vars.curTime = new TimeSpan(0, 0, 0, current.timer[0], current.timer[16] * 100); // Under 1 minute
     // Who would split within the first second anyways (¬_¬)
-    else if (current.p1 != old.p1) vars.oldTime = new TimeSpan(0, 0, 0, 0, current.p1 * 100); // Under 1 second
+    else if (current.timer[0] != old.timer[0]) vars.curTime = new TimeSpan(0, 0, 0, 0, current.timer[0] * 100); // Under 1 second
 
-    return vars.oldTime;
+    // Prevents timer hiccups:
+    if(vars.curTime > vars.oldTime){
+        vars.oldTime = vars.curTime;
+        return vars.curTime;
+    }
+    else{
+        return vars.oldTime;
+    }
 }
 
 split {
@@ -283,6 +290,8 @@ onReset{
     print("Reset");
     // Resets timer history tracker:
     vars.oldTime = new TimeSpan(0, 0, 0, 0, 0);
+    // Resets timer variable:
+    vars.curTime = new TimeSpan(0, 0, 0, 0, 0);
     // Resets the list of split segments:
     vars.splitted = new HashSet<string>();
 }
