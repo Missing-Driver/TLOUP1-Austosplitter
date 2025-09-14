@@ -9,7 +9,7 @@
     // TaskManager, 0x80:
 
 state("tlou-i", "v1.1.4.0-Steam"){
-    byte timer : 0x067F4478, 0x40, 0x488, 0xB38; // In-game timer
+    byte64 timer : 0x067F4478, 0x40, 0x488, 0xB38; // In-game timer
     string52 task : 0x6427ED0, 0x80; // Task ID string
     byte isMainMenu : 0x35D8CE8; // Menu boolean flag
 }
