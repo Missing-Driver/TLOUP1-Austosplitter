@@ -22,10 +22,6 @@ state("tlou-i", "v1.1.5.0-Steam"){
 startup{
     // Object containing useful functions:
     vars.Funcs = new ExpandoObject();
-    // Contains a copy of the previous time:
-    vars.oldTime = new TimeSpan(0, 0, 0, 0, 0);
-    // Contains the current time:
-    vars.curTime = new TimeSpan(0, 0, 0, 0, 0);
     // Keeps track of which checkpoints already caused a split:
     vars.splitted = new HashSet<string>();
 
@@ -203,36 +199,38 @@ startup{
 init{
     // Identifying game version:
     var module = modules.First(); // tlou-i.exe
-    var hash = vars.Funcs.hashModule(module);
+    string hash = vars.Funcs.hashModule(module);
     print("\nGAME HASH: " + hash + "\n");
 
-    // Default version: Patch 1.1.5.0 Steam
-    version = "v1.1.5.0-Steam";
-     // TODO: add the Epic games version hash:
-    if(hash == "0"){
-        version = "v1.1.5.0-EpicGames";
-    }else if(hash == "EDB41BE482CEC8F9C6B5EE2528DC04B80EA964D5085953D0A5B0931637CAEF10"){
-        version = "v1.1.4.0-Steam";
-    }else if(hash == "088D37AFF3B8E3F65715E7E325547C07E6C4D794966C0573CD0F7AF5C6C3503A"){
-        // Don't do anything, the default variables are the Steam ones...
+    switch(hash){
+        case("EDB41BE482CEC8F9C6B5EE2528DC04B80EA964D5085953D0A5B0931637CAEF10"):
+            version = "v1.1.4.0-Steam";
+            break;
+        case("088D37AFF3B8E3F65715E7E325547C07E6C4D794966C0573CD0F7AF5C6C3503A"):
+            version = "v1.1.5.0-Steam";
+            break;
+        // TODO: add the Epic games version hashes:
+        case("0"):
+            version = "v1.1.5.0-EpicGames";
+            break;
+        // Default version: Patch 1.1.5.0 Steam:
+        default:
+            version = "v1.1.5.0-Steam";
+            // If no version was identified, show a warning message:
+            MessageBox.Show(
+                "The Autosplitter could not identify the game version, the default version was set to " + version + ".\nIf this is not the version of your game, the Autosplitter might not work properly.",
+                "TLOU Autosplitter",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning
+            );
+            break;
     }
-    else{
-        // If no version was identified, show a warning message:
-        MessageBox.Show(
-            "The Autosplitter could not identify the game version, the default version was set to " + version + ".\nIf this is not the version of your game, the Autosplitter might not work properly.",
-            "TLOU Autosplitter",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Warning
-        );
-    }
-}
-
-update{
-    print(current.task);
 }
 
 isLoading{
-    // No need, the timer follows the in game Timer for GameTime, and for RTA it doesn't matter at all.
+    // As described in the official documentation (https://github.com/LiveSplit/LiveSplit.AutoSplitters#game-time-1),
+    // we permanently return true to avoid timer flickering:
+    return true;
 }
 
 start{
@@ -255,23 +253,13 @@ start{
 //      01  02  03  00  | 01:02.3 (One minute, two seconds and 300 milliseconds)
 //      01  02  03  04  | 01:02:03.4 (One hour, two minute, three seconds and 400 milliseconds)
 gameTime{
-    // The game "knows" what the depth of the stack is, we don't.
-    // 01  00  00  00 could be eiter 100 milliseconds or 1:00:00.00 (one hour).
-    // However, since the first value in changing is the miliseconds position, we can determine the correct time with it:
-    if (current.timer[48] != old.timer[48]) vars.curTime = new TimeSpan(0, current.timer[0], current.timer[16], current.timer[32], current.timer[48] * 100); // Above 1 hour
-    else if (current.timer[32] != old.timer[32]) vars.curTime = new TimeSpan(0, 0, current.timer[0], current.timer[16], current.timer[32] * 100); // Under 1 hour
-    else if (current.timer[16] != old.timer[16]) vars.curTime = new TimeSpan(0, 0, 0, current.timer[0], current.timer[16] * 100); // Under 1 minute
+    // The game sets to 3 the 13th byte if the position is being used.
+    // So by reading this value, we can determine the depth of the timer stack:
+    if (current.timer[60] > 0) return new TimeSpan(0, current.timer[0], current.timer[16], current.timer[32], current.timer[48] * 100); // Over 1 hour
+    else if (current.timer[44] > 0) return new TimeSpan(0, 0, current.timer[0], current.timer[16], current.timer[32] * 100); // Under 1 hour (minutes)
+    else if (current.timer[28] > 0) return new TimeSpan(0, 0, 0, current.timer[0], current.timer[16] * 100); // Under 1 minute (seconds)
+    // Now we know seconds is the lowest position the timer starts with.
     // Who would split within the first second anyways (¬_¬)
-    else if (current.timer[0] != old.timer[0]) vars.curTime = new TimeSpan(0, 0, 0, 0, current.timer[0] * 100); // Under 1 second
-
-    // Prevents timer hiccups:
-    if(vars.curTime > vars.oldTime){
-        vars.oldTime = vars.curTime;
-        return vars.curTime;
-    }
-    else{
-        return vars.oldTime;
-    }
 }
 
 split {
@@ -287,11 +275,6 @@ split {
 }
 
 onReset{
-    print("Reset");
-    // Resets timer history tracker:
-    vars.oldTime = new TimeSpan(0, 0, 0, 0, 0);
-    // Resets timer variable:
-    vars.curTime = new TimeSpan(0, 0, 0, 0, 0);
     // Resets the list of split segments:
     vars.splitted = new HashSet<string>();
 }
