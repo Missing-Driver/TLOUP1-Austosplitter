@@ -112,7 +112,8 @@ startup{
                     {"hun-financial-plaza-fight", "Hotel Lobby completion", "After exiting the hotel and skipping the financial discrict cutscene", "mg_pittsburgh", true},
                     // Financial district
                     {"hun-financial-plaza-seek-exit", "Financial district 1st enconter end", "After skipping Ellie's cutscene", "mg_pittsburgh", true},
-                    {"hun-financial-chase-approach", "Financial district 2nd encounter end", "After climbing the ladder and jumping over the bus", "mg_pittsburgh", true},
+                    {"hun-financial-libertyave-fireescape", "Financial district 2nd encounter end", "After killing all the enemies", "mg_pittsburgh", true},
+                    {"hun-financial-chase-approach", "Financial district Bus jump", "After climbing the fire ladder and jumping over the bus", "mg_pittsburgh", true},
                     {"hun-camp-apartment-start", "Financial district completion", "After meeting Henry and Sam for the first time and skipping the cutscene", "mg_pittsburgh", true},
                     // Escape the city
                     {"hun-camp-alley-post-fight", "Toy store fight end", "After killing the enemies at the back of the Toy store", "mg_pittsburgh", true},
@@ -270,6 +271,7 @@ split {
         !vars.splitted.Contains(current.task) // and the current segment hasn't been split before, then:
     ){
         vars.splitted.Add(current.task); // Add the segment to the list of already split segments
+        print("SPLIT: " + current.task);
         return true; // Split
     }
 }
