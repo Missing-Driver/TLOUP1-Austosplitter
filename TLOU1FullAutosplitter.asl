@@ -26,15 +26,15 @@ startup{
     vars.splitted = new HashSet<string>();
 
     // Calculates the hash of a given module.
-    // Taken from ISO2768mK's Horizon Forbidden West load remover
+    // Based on ISO2768mK's Horizon Forbidden West load remover
     // (Used to determinte the running game version):
     vars.Funcs.hashModule = (Func<ProcessModuleWow64Safe, string>)((module) => {
         byte[]  hashBytes = new byte[0];
-        using (var sha256Object = System.Security.Cryptography.SHA256.Create())
+        using (var MD5Object = System.Security.Cryptography.MD5.Create())
         {
             using (var binary = File.Open(module.FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
-                hashBytes = sha256Object.ComputeHash(binary);
+                hashBytes = MD5Object.ComputeHash(binary);
             }
         }
         var hexHashString = hashBytes.Select(x => x.ToString("X2")).Aggregate((a, b) => a + b);
@@ -204,10 +204,10 @@ init{
     print("\nGAME HASH: " + hash + "\n");
 
     switch(hash){
-        case("EDB41BE482CEC8F9C6B5EE2528DC04B80EA964D5085953D0A5B0931637CAEF10"):
+        case("2E150B5FE343E3496384B5D3E1547591"):
             version = "v1.1.4.0-Steam";
             break;
-        case("088D37AFF3B8E3F65715E7E325547C07E6C4D794966C0573CD0F7AF5C6C3503A"):
+        case("5899F93E00BA8D34F87C3B643D6B1274"):
             version = "v1.1.5.0-Steam";
             break;
         // TODO: add the Epic games version hashes:
