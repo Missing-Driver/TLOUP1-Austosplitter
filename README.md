@@ -100,7 +100,7 @@ Use these checkboxes to quickly enable or disable all autosplitter actions at on
 To enable/disable specific segments, keep reading...
 
 ### Advanced options
-Use these checkboxes to enable/disable specific segments, in which LiveSplit will automatically perform actions for you. Hover the mouse over an option to see a small description of the element:
+Use these checkboxes to enable/disable specific segments, in which LiveSplit will automatically perform actions for you. Hover the mouse over an option to see a short description of the element:
 
 ![ASL file location](docs/img/layout-settings-autosplitter-advanced-options.png "ASL file location")
 
@@ -137,6 +137,10 @@ Once you finish enabling/disabling all you need, click on the `OK` button of thi
 >**Warning:** Don't click `Cancel` on any of the windows or your changes will be lost and you will have to select your splits again!
 
 ![Ok buttons](docs/img/layout-settings-autosplitter-ok.png "Ok buttons")
+
+Don't forget to save the layout to make your changes permanent:
+
+![Save layout](docs/img/save-layout.png "Save layout")
 
 ## 8. Testing
 
