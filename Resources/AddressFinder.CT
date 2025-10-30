@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<CheatTable CheatEngineTableVersion="42">
+<CheatTable CheatEngineTableVersion="46">
   <CheatEntries>
     <CheatEntry>
       <ID>34</ID>
       <Description>"Find offsets"</Description>
+      <LastState/>
       <VariableType>Auto Assembler Script</VariableType>
       <AssemblerScript>{$lua}
 if syntaxcheck then return end
@@ -23,9 +24,10 @@ function aobScamEx(entry, baseAddress)
 end
 
 local aobEntries = {
-      { name = "TimerBase", sig = "C5 F8 11 0D ?? ?? ?? ?? C5 F8 77 E8 ?? ?? ?? ?? 49 8B C5 48 8B 8D ?? ?? ?? ??", dispOffset = 4, instrSize = 8 },
       { name = "TasksManager", sig = "48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 ?? E8 ?? ?? ?? ?? 48 8B C8", dispOffset = 3, instrSize = 7 },
-      { name = "MainMenuFlag", sig = "C6 05 ?? ?? ?? ?? 01 C3 CC CC CC CC CC CC CC CC C6 05 ?? ?? ?? ?? 00", dispOffset = 2, instrSize = 7 }
+      { name = "timeListBase", sig = "48 8B 0D ?? ?? ?? ?? 41 8D 55 30 48 81 C1", dispOffset = 3, instrSize = 7 },
+      { name = "segmentTime/isSpeedrun", sig = "48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 48 18 E8", dispOffset = 3, instrSize = 7 },
+      { name = "MainMenuFlag", sig = "C6 05 ?? ?? ?? ?? 01 C3 CC CC CC CC CC CC CC CC C6 05 ?? ?? ?? ?? 00", dispOffset = 2, instrSize = 7 },
 }
 
 local xbase = readInteger(process) and GetAddress(process)
@@ -43,4 +45,32 @@ end
     </CheatEntry>
   </CheatEntries>
   <UserdefinedSymbols/>
+  <DisassemblerComments>
+    <DisassemblerComment>
+      <Address>"tlou-ii.exe"+3AB920</Address>
+      <Comment>Reads chapter IGT (double)
+</Comment>
+    </DisassemblerComment>
+    <DisassemblerComment>
+      <Address>"tlou-ii.exe"+3AB928</Address>
+      <Comment>Multiplies by 1000
+</Comment>
+    </DisassemblerComment>
+    <DisassemblerComment>
+      <Address>"tlou-ii.exe"+3AB930</Address>
+      <Comment>Stores the result without
+floating point into RAX
+</Comment>
+    </DisassemblerComment>
+    <DisassemblerComment>
+      <Address>"tlou-ii.exe"+12F42B6</Address>
+      <Comment>Reads final JSON
+</Comment>
+    </DisassemblerComment>
+    <DisassemblerComment>
+      <Address>"tlou-ii.exe"+286C610</Address>
+      <Comment>LOOP
+</Comment>
+    </DisassemblerComment>
+  </DisassemblerComments>
 </CheatTable>

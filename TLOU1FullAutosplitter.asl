@@ -1,33 +1,40 @@
 // Base address signatures:
-    // TaskManager: 48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 ?? E8 ?? ?? ?? ?? 48 8B C8
-    // TimerBase: C5 F8 11 0D ?? ?? ?? ?? C5 F8 77 E8 ?? ?? ?? ?? 49 8B C5 48 8B 8D ?? ?? ?? ??
-    // MainMenuFlag: C6 05 ?? ?? ?? ?? 01 C3 CC CC CC CC CC CC CC CC C6 05 ?? ?? ?? ?? 00
-
-    // Timer [64 bytes divided in 4 positions of 16 bytes (p1, p2, p3 and p4)]:
-    // TimerBase, 0x40, 0x488, 0xB38;
-    // Task ID:
-    // TaskManager, 0x80:
+    // task base: 48 8B 0D ?? ?? ?? ?? 48 8B 01 FF 50 ?? E8 ?? ?? ?? ?? 48 8B C8
+    // timeListBase: 48 8B 0D ?? ?? ?? ?? 41 8D 55 30 48 81 C1
+    // segmentTime/isSpeedrun base: 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 48 18 E8
+    // isMainMenu: C6 05 ?? ?? ?? ?? 01 C3 CC CC CC CC CC CC CC CC C6 05 ?? ?? ?? ?? 00
 
 state("tlou-i", "v1.1.4.0-Steam"){
-    byte64 timer : 0x067F4478, 0x40, 0x488, 0xB38; // In-game timer
     string52 task : 0x6427ED0, 0x80; // Task ID string
+    ulong timeListBase : 0x5F27188; // Segment time list supercontainer
+    double segmentTime : 0x34E2FE0, 0x4960; // Running segment time
+    byte isSpeedrun : 0x34E2FE0, 0x477C; // Speedrun mode flag
     byte isMainMenu : 0x35D8CE8; // Menu boolean flag
 }
 state("tlou-i", "v1.1.5.0-Steam"){
-    byte64 timer : 0x67FFDE8, 0x40, 0x488, 0xB38; // In-game timer
     string52 task : 0x6433150, 0x80; // Task ID string
+    ulong timeListBase : 0x5F31438; // Segment time list supercontainer
+    double segmentTime : 0x34ECFE0, 0x4960; // Running segment time
+    byte isSpeedrun : 0x34ECFE0, 0x477C; // Speedrun mode flag
     byte isMainMenu : 0x35E2CE8; // Menu boolean flag
 }
 
 startup{
     // Object containing useful functions:
     vars.Funcs = new ExpandoObject();
+
+    // Stores the memory addresses containing the completed segment times.
+    // Used to calculate the accurate IGT:
+    vars.timeListPointers = new List<ulong>();
+    vars.timeListOffset = 0xDA640; // Segment time list offset
+    vars.nSegments = 30; // Amount of segments (chapters)
+
     // Keeps track of which checkpoints already caused a split:
     vars.splitted = new HashSet<string>();
 
     // Calculates the hash of a given module.
     // Based on ISO2768mK's Horizon Forbidden West load remover
-    // (Used to determinte the running game version):
+    // (Used to determine the running game version):
     vars.Funcs.hashModule = (Func<ProcessModuleWow64Safe, string>)((module) => {
         byte[]  hashBytes = new byte[0];
         using (var MD5Object = System.Security.Cryptography.MD5.Create())
@@ -39,6 +46,39 @@ startup{
         }
         var hexHashString = hashBytes.Select(x => x.ToString("X2")).Aggregate((a, b) => a + b);
         return hexHashString;
+    });
+
+    // Initialize the segment time list.
+    // The segment list on memory is an array of 4 byte slots where the completed segment
+    // times are stored (in milliseconds). The game uses this list to calculate the in-game speedrun time:
+    vars.Funcs.initTimePointerList = (Action<ulong>)((timeListContainer) => {
+        vars.timeListPointers = new List<ulong>();
+        // Adds a new pointer address for every segment time slot:
+        for(int i = 0; i <= vars.nSegments; i++){
+            vars.timeListPointers.Add(
+                // Time list super container + time list start address + time slot (4 bytes)
+                timeListContainer + (ulong)(vars.timeListOffset + (i * 4))
+            );
+        }
+    });
+
+    //Calculates undeniably, perfectly accurate IGT (exactly as the game does):
+    vars.Funcs.getAccurateIGT = (Func<System.Diagnostics.Process, double, bool, TimeSpan>)((gameInstance, currentSegmentTime, speedrunMode) => {
+        int IGT = 0;
+        double adjustedSegmentTime = currentSegmentTime;
+        if(speedrunMode){ // Only if speedrun mode is on:
+            for(int i = 0; i <= vars.nSegments; i++){ // Sum of all the segment times:
+                IGT += gameInstance.ReadValue<int>((IntPtr)(vars.timeListPointers[i]));
+            }
+        }
+        // The game multiplies by 1000 the double segment time value to get the milliseconds,
+        // then truncates the result to keep it as an integer, and adds it to the sum of saved times:
+        IGT += (int)(adjustedSegmentTime * 1000);
+        // Since the in game timer only displays hundreds of milliseconds, the game rounds the time:
+        IGT = (int)(Math.Round(IGT / 100.0) * 100.0); // round to nearest 100 ms
+        // Don't ask me why it does all of this, I didn't developed the game...
+        // Returns IGT from calculated milliseconds:
+        return new TimeSpan(0, 0, 0, 0, IGT);
     });
 
     // CONTAINS THE AUTOSPLITTER SETTINGS AND SPLITS:
@@ -108,7 +148,7 @@ startup{
                     // Hotel Lobby
                     {"hun-hotel-basement-maze", "Swimming segment", "After reaching the swimming segment at the basement", "mg_pittsburgh", true},
                     {"hun-hotel-kitchen-restaurant-fight", "Restaurant kitchen", "Entering the kitchen", "mg_pittsburgh", true},
-                    {"hun-ellie-gun", "Ellie saves Joel", "After Ellie shoots the the bad guy and the cutscene starts", "mg_pittsburgh", true},
+                    {"hun-ellie-gun", "Ellie saves Joel", "After Ellie shoots the bad guy and the cutscene starts", "mg_pittsburgh", true},
                     {"hun-financial-plaza-fight", "Hotel Lobby completion", "After exiting the hotel and skipping the financial discrict cutscene", "mg_pittsburgh", true},
                     // Financial district
                     {"hun-financial-plaza-seek-exit", "Financial district 1st enconter end", "After skipping Ellie's cutscene", "mg_pittsburgh", true},
@@ -198,6 +238,8 @@ startup{
 }
 
 init{
+    // Signals if the time list has to be initiliazed:
+    vars.isTimeListReady = false;
     // Identifying game version:
     var module = modules.First(); // tlou-i.exe
     string hash = vars.Funcs.hashModule(module);
@@ -226,6 +268,24 @@ init{
             );
             break;
     }
+    print("\nSELECTED GAME VERSION: " + version + "\n");
+
+    // Initialize the time list if the timeListBase pointer is not empty:
+    if(current.timeListBase != null && current.timeListBase > 0){
+        print("\nUPDATING TIME LIST POINTERS [INIT]...\n");
+        vars.Funcs.initTimePointerList(current.timeListBase);
+        vars.isTimeListReady = true;
+    }
+}
+
+update{
+    // Fall back for an empty timeListBase pointer.
+    // It executes only once:
+    if(!vars.isTimeListReady && current.timeListBase != null && current.timeListBase > 0){
+        print("\nUPDATING TIME LIST POINTERS [UPDATE]...\n");
+        vars.Funcs.initTimePointerList(current.timeListBase);
+        vars.isTimeListReady = true;
+    }
 }
 
 isLoading{
@@ -238,29 +298,16 @@ start{
     return // Start the timer if:
         settings.ContainsKey(current.task + "-start") && // the current segment is a valid starting point,
         settings[current.task + "-start"] && // this starting point was selected by the user in the settings,
-        (current.timer[0] + current.timer[16] + current.timer[32] + current.timer[48] == 0) // the in-game timer is 00:00:00.0
+        current.segmentTime == 0 // the in-game timer is 00:00:00.0
         && current.isMainMenu == 0; // and we are not in  the main menu
 }
 
 // Pegs the LiveSplit GameTime timer to the game's IGT.
-// Timer is trated as a stack of 4 slots in memory (p1, p2, p3 and p4)
-// [64 bytes divided in 4 positions of 16 bytes]
-// in which the left most value is the highest time.
-// Example times:
-//      p1  p2  p3  p4
-//      ---------------
-//      01  00  00  00  | 1 (100 milliseconds)
-//      01  02  00  00  | 01.2 (One second and 200 milliseconds)
-//      01  02  03  00  | 01:02.3 (One minute, two seconds and 300 milliseconds)
-//      01  02  03  04  | 01:02:03.4 (One hour, two minute, three seconds and 400 milliseconds)
 gameTime{
-    // The game sets to 3 the 13th byte if the position is being used.
-    // So by reading this value, we can determine the depth of the timer stack:
-    if (current.timer[60] > 0) return new TimeSpan(0, current.timer[0], current.timer[16], current.timer[32], current.timer[48] * 100); // Over 1 hour
-    else if (current.timer[44] > 0) return new TimeSpan(0, 0, current.timer[0], current.timer[16], current.timer[32] * 100); // Under 1 hour (minutes)
-    else if (current.timer[28] > 0) return new TimeSpan(0, 0, 0, current.timer[0], current.timer[16] * 100); // Under 1 minute (seconds)
-    // Now we know seconds is the lowest position the timer starts with.
-    // Who would split within the first second anyways (¬_¬)
+    // All this does is add the segment times from memory and the current segment time
+    // if speedrun mode is on, or only the current segment time otherwise
+    // (just like the in-game timer does):
+    return vars.Funcs.getAccurateIGT(game, current.segmentTime, current.isSpeedrun == 1);
 }
 
 split {
