@@ -28,7 +28,7 @@ An **autosplitter** automatically starts/splits/resets LiveSplit by reading the 
 
 Main Features:
 
-- Auto-start and auto-split (obviously).
+- Auto-start, auto-split and auto-reset (obviously).
 - A wide selection of split segments to choose from, including chapter completion and critical segments.
 - Accurate time that matches the in-game timer throughout the entire run.
 - Game-crash bullet proof: The LiveSplit timer will remain accurate even after a game crash or if the user gets out to the main menu by accident, once the run is resumed.
@@ -95,7 +95,7 @@ Use these checkboxes to quickly enable or disable all autosplitter actions at on
 
 - **Start:** Enables/disables LiveSplit's ability to automatically start the timer for you.
 - **Split:** Enables/disables LiveSplit's ability to automatically split for you.
-- **Reset (not supported by this autosplitter):** Enables/disables LiveSplit ability to automatically reset the timer for you.
+- **Reset:** Enables/disables LiveSplit ability to automatically reset the timer for you. This autosplitter resets automatically before starting a new run atempt, right before the starting point you select in the **Advanced options** (keep reading for more information).
 
 To enable/disable specific segments, keep reading...
 

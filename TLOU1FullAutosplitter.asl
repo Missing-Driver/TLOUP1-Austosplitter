@@ -286,6 +286,11 @@ update{
         vars.Funcs.initTimePointerList(current.timeListBase);
         vars.isTimeListReady = true;
     }
+
+    // Debug:
+    if(current.task != old.task){
+        print("\nTASK CHANGED: " + current.task + "\n");
+    }
 }
 
 isLoading{
@@ -308,6 +313,17 @@ gameTime{
     // if speedrun mode is on, or only the current segment time otherwise
     // (just like the in-game timer does):
     return vars.Funcs.getAccurateIGT(game, current.segmentTime, current.isSpeedrun == 1);
+}
+
+reset{
+    if(
+        current.task != old.task && // If the task has changed,
+        settings.ContainsKey(current.task + "-start") && // the current segment is a valid starting point,
+        settings[current.task + "-start"] // and this starting point was selected by the user in the settings
+    ){
+        print("\nRESET\n");
+        return true; // Reset
+    }
 }
 
 split {
