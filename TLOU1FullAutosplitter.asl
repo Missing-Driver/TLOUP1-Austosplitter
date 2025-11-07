@@ -3,20 +3,23 @@
     // timeListBase: 48 8B 0D ?? ?? ?? ?? 41 8D 55 30 48 81 C1
     // segmentTime/isSpeedrun base: 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 48 18 E8
     // isMainMenu: C6 05 ?? ?? ?? ?? 01 C3 CC CC CC CC CC CC CC CC C6 05 ?? ?? ?? ?? 00
+    // subTaskHash base: 48 8B 0D ?? ?? ?? ?? 48 8D 55 07 E8
 
-state("tlou-i", "v1.1.4.0-Steam"){
+state("tlou-i", "1.1.4.0"){
     string52 task : 0x6427ED0, 0x80; // Task ID string
     ulong timeListBase : 0x5F27188; // Segment time list supercontainer
     double segmentTime : 0x34E2FE0, 0x4960; // Running segment time
     byte isSpeedrun : 0x34E2FE0, 0x477C; // Speedrun mode flag
     byte isMainMenu : 0x35D8CE8; // Menu boolean flag
+    ulong subTaskHash : 0x6427EE8, 0xB10; // 8 byte FNV1a raw sub taks hash
 }
-state("tlou-i", "v1.1.5.0-Steam"){
+state("tlou-i", "1.1.5.0"){
     string52 task : 0x6433150, 0x80; // Task ID string
     ulong timeListBase : 0x5F31438; // Segment time list supercontainer
     double segmentTime : 0x34ECFE0, 0x4960; // Running segment time
     byte isSpeedrun : 0x34ECFE0, 0x477C; // Speedrun mode flag
     byte isMainMenu : 0x35E2CE8; // Menu boolean flag
+    ulong subTaskHash : 0x6433168, 0xB10; // 8 byte FNV1a raw sub taks hash
 }
 
 startup{
@@ -32,6 +35,13 @@ startup{
     // Keeps track of which checkpoints already caused a split:
     vars.splitted = new HashSet<string>();
 
+    // Generates a Hex string from an ulong number.
+    vars.Funcs.ulongToHex = (Func<ulong, string>)((val) => {
+        byte[] bytes = BitConverter.GetBytes(val);
+        Array.Reverse(bytes);
+        return bytes.Select(x => x.ToString("X2")).Aggregate((a, b)=> a + b);
+    });
+
     // Calculates the hash of a given module.
     // Based on ISO2768mK's Horizon Forbidden West load remover
     // (Used to determine the running game version):
@@ -44,9 +54,9 @@ startup{
                 hashBytes = MD5Object.ComputeHash(binary);
             }
         }
-        var hexHashString = hashBytes.Select(x => x.ToString("X2")).Aggregate((a, b) => a + b);
-        return hexHashString;
+        return hashBytes.Select(x => x.ToString("X2")).Aggregate((a, b) => a + b);
     });
+
 
     // Initialize the segment time list.
     // The segment list on memory is an array of 4 byte slots where the completed segment
@@ -62,7 +72,7 @@ startup{
         }
     });
 
-    //Calculates undeniably, perfectly accurate IGT (exactly as the game does):
+    // Calculates undeniably, perfectly accurate IGT (exactly as the game does):
     vars.Funcs.getAccurateIGT = (Func<System.Diagnostics.Process, double, bool, TimeSpan>)((gameInstance, currentSegmentTime, speedrunMode) => {
         int IGT = 0;
         double adjustedSegmentTime = currentSegmentTime;
@@ -76,9 +86,22 @@ startup{
         IGT += (int)(adjustedSegmentTime * 1000);
         // Since the in game timer only displays hundreds of milliseconds, the game rounds the time:
         IGT = (int)(Math.Round(IGT / 100.0) * 100.0); // round to nearest 100 ms
-        // Don't ask me why it does all of this, I didn't developed the game...
+        // Don't ask me why it does all of this, I didn't develope the game...
         // Returns IGT from calculated milliseconds:
         return new TimeSpan(0, 0, 0, 0, IGT);
+    });
+
+    // Checks split events:
+    vars.Funcs.checkSplit = (Func<dynamic, string, bool>)((userSettings, splitID) => {
+        if(
+            userSettings.ContainsKey(splitID) && // if the current segment is part of the split list,
+            userSettings[splitID] && // and if the current segment was selected by the user in the settings,
+            !vars.splitted.Contains(splitID) // and the current segment hasn't been split before, then:
+        ){
+            vars.splitted.Add(splitID); // Add the segment to the list of already split segments
+            print("SPLIT: " + splitID);
+            return true; // Split
+        }else return false;
     });
 
     // CONTAINS THE AUTOSPLITTER SETTINGS AND SPLITS:
@@ -222,6 +245,42 @@ startup{
                 {"mg_jackson", "Jackson", null, "mg_chapters", true},
                     // Epilogue
                     {"end-game-outro", "Epilogue", "After taking Joel's hand", "mg_jackson", true},
+        // LEFT BEHIND
+        {"left_behind", "Left behind DLC", "DLC splits", null, true},
+            // STARTING POINTS
+            {"lb_starting_points", "Starting points", "Select when livesplit will start the timer", "left_behind", true},
+                // This accounts for the RTA timer start, although the IGT will be paused:
+                {"dlc-uni-intro-start", "Any%", "When the 1st cutscene starts playing (this is when the game actually starts)", "lb_starting_points", true},
+            // CHAPTERS:
+            {"lb_chapters", "Chapters", null, "left_behind", true},
+                // BACK IN A FLASH
+                {"lb_flashback", "Back in a flash", null, "lb_chapters", true},
+                    {"mal-col-drugstore-helicopter-reveal", "Drugstore puzzle completion", "When unlocking the door at the drugstore", "lb_flashback", true},
+                    {"mal-qz-corridor-transition-igc", "Back in flash completion", "After leaping over the railing", "lb_flashback", true},
+                // MALLRATS
+                {"lb_mallrats", "Mallrats", null, "lb_chapters", true},
+                    {"mal-qz-corridor-crawlspace-igc", "Debris walking simulator", "When prying openning the hole through the debris", "lb_mallrats", true},
+                    {"mal-qz-atrium-pre-throwing-contest", "Halloween store end", "After exiting the halloween store", "lb_mallrats", true},
+                    {"mal-qz-atrium-post-throwing-contest", "Brick master", "After breaking the last window of the throwing contest", "lb_mallrats", true},
+                    {"mal-col-atrium-explore-intro", "Mallrats completion", "After entering the misterious hall at the mall (cutscene)", "lb_mallrats", true},
+                // SO CLOSE
+                {"lb_so_close", "So close", null, "lb_chapters", true},
+                    {"mal-col-loadingdock-fill-gascan", "Gascan encounter completion", "After killing the 4 infected, before filling the gascan", "lb_so_close", true},
+                    {"mal-col-petstore-fight", "Electrified water puzzle completion", "After unlocking the door leading to the petstore", "lb_so_close", true},
+                    {"mal-qz-atrium-reveal-carousel-return-igc", "So close completion", "After the helo medkit cutscene", "lb_so_close", true},
+                // FUN AND GAMES
+                {"lb_games", "Fun and games", null, "lb_chapters", true},
+                    {"qz-arcade-post", "Arcade game completion", "When the post-arcade cutscene starts playing", "lb_games", true},
+                    {"col-helicopter-hear-clickers", "Fun and games completion", "When the backpack cutscene starts playing, after completing the water fight segment", "lb_games", true},
+                // THE ENEMY OF MY ENEMY
+                {"lb_enemy", "The enemy of my enemy", null, "lb_chapters", true},
+                    {"mal-col-entrance-save-joel-fight", "Portrait gallery exit", "After the dollar store encounter, after exiting through the portrait gallery gate", "lb_enemy", true},
+                    {"D21F007B858BEA35", "Final encounter wave 1 completion", "After Killing the last enemy of wave 1", "lb_enemy", true},
+                    {"AE12DABBC5442B92", "Final encounter wave 2 start", "When the mall ambush starts", "lb_enemy", true},
+                    {"mal-qz-escape-start-igc", "The enemy of my enemy completion", "After openning the locked gate", "lb_enemy", true},
+                // ESCAPE FROM LIBERTY GARDENS
+                {"lb_escape", "Escape from liberty gardens", null, "lb_chapters", true},
+                    {"qz-escape-aftermath", "Escape from liberty gardens completion", "After rescuing Riley", "lb_escape", true},
     };
 
     // Initialize autosplitter settings
@@ -247,18 +306,14 @@ init{
 
     switch(hash){
         case("2E150B5FE343E3496384B5D3E1547591"):
-            version = "v1.1.4.0-Steam";
+            version = "1.1.4.0";
             break;
         case("5899F93E00BA8D34F87C3B643D6B1274"):
-            version = "v1.1.5.0-Steam";
+            version = "1.1.5.0";
             break;
-        // TODO: add the Epic games version hashes:
-        case("0"):
-            version = "v1.1.5.0-EpicGames";
-            break;
-        // Default version: Patch 1.1.5.0 Steam:
+        // Default version: Patch 1.1.5.0:
         default:
-            version = "v1.1.5.0-Steam";
+            version = "1.1.5.0";
             // If no version was identified, show a warning message:
             MessageBox.Show(
                 "The Autosplitter could not identify the game version, the default version was set to " + version + ".\nIf this is not the version of your game, the Autosplitter might not work properly.",
@@ -288,9 +343,11 @@ update{
     }
 
     // Debug:
-    if(current.task != old.task){
-        print("\nTASK CHANGED: " + current.task + "\n");
-    }
+//     if(current.task != old.task){
+//         print("\nTASK CHANGED: " + current.task + "\n");
+//     }else if(current.subTaskHash != old.subTaskHash){ // on sub-task change...
+//         print("\nSUB-TASK CHANGED: " + vars.Funcs.ulongToHex(current.subTaskHash) + "\n");
+//     }
 }
 
 isLoading{
@@ -327,15 +384,12 @@ reset{
 }
 
 split {
-    if(
-        current.task != old.task && // On task change,
-        settings.ContainsKey(current.task) && // if the current segment is part of the split list,
-        settings[current.task] && // and if the current segment was selected by the user in the settings,
-        !vars.splitted.Contains(current.task) // and the current segment hasn't been split before, then:
-    ){
-        vars.splitted.Add(current.task); // Add the segment to the list of already split segments
-        print("SPLIT: " + current.task);
-        return true; // Split
+    // TASK SPLITS:
+    if(current.task != old.task){ // On task change...
+        return vars.Funcs.checkSplit(settings, current.task);
+    } // SUB-TASK SPLITS:
+    else if(current.subTaskHash != old.subTaskHash){ // on sub-task change...
+        return vars.Funcs.checkSplit(settings, vars.Funcs.ulongToHex(current.subTaskHash));
     }
 }
 

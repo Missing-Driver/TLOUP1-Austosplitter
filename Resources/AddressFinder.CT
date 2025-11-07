@@ -28,6 +28,7 @@ local aobEntries = {
       { name = "timeListBase", sig = "48 8B 0D ?? ?? ?? ?? 41 8D 55 30 48 81 C1", dispOffset = 3, instrSize = 7 },
       { name = "segmentTime/isSpeedrun", sig = "48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 48 18 E8", dispOffset = 3, instrSize = 7 },
       { name = "MainMenuFlag", sig = "C6 05 ?? ?? ?? ?? 01 C3 CC CC CC CC CC CC CC CC C6 05 ?? ?? ?? ?? 00", dispOffset = 2, instrSize = 7 },
+      { name = "subTaskHash", sig = "48 8B 0D ?? ?? ?? ?? 48 8D 55 07 E8", dispOffset = 3, instrSize = 7 },
 }
 
 local xbase = readInteger(process) and GetAddress(process)
@@ -40,6 +41,127 @@ for i, entry in ipairs(aobEntries) do
 end
 
 [DISABLE]
+
+</AssemblerScript>
+    </CheatEntry>
+    <CheatEntry>
+      <ID>35</ID>
+      <Description>"Executable MD5 Hash (using wmic and certutil Windows utilities)"</Description>
+      <LastState/>
+      <VariableType>Auto Assembler Script</VariableType>
+      <AssemblerScript>{$lua}
+if syntaxcheck then return end
+
+[ENABLE]
+
+-- Lua script: compute MD5 of main executable for the process Cheat Engine is attached to
+
+-- helper: trim
+local function trim(s) return (s:gsub("^%s*(.-)%s*$", "%1")) end
+
+-- get the PID of the opened process
+local pid = nil
+if type(getOpenedProcessID) == "function" then
+  pid = getOpenedProcessID()
+end
+
+-- try to obtain full executable path using wmic (safer than guessing)
+local exePath = nil
+if pid and pid ~= 0 then
+  local cmd = 'wmic process where processid=' .. tostring(pid) .. ' get ExecutablePath /value'
+  local h = io.popen(cmd)
+  if h then
+    local out = h:read("*a")
+    h:close()
+    if out and out ~= "" then
+      -- look for "ExecutablePath=..."
+      local m = out:match("ExecutablePath%s*=%s*(.-)%s*\n")
+      if not m then
+        -- maybe last line no newline
+        m = out:match("ExecutablePath%s*=%s*(.+)")
+      end
+      if m and m ~= "" then
+        exePath = trim(m)
+      end
+    end
+  end
+end
+
+-- fallback: try getProcessName (gives filename, not full path)
+if not exePath then
+  if type(getProcessName) == "function" then
+    local pname = getProcessName()
+    if pname and pname ~= "" then
+      exePath = pname -- may be just filename; certutil works with full path or filename if cwd accessible
+    end
+  end
+end
+
+-- final fallback: ask the user (print message)
+if not exePath or exePath == "" then
+  print("[MD5] Could not determine executable path for the opened process.")
+  print("[MD5] Make sure a process is opened/selected in Cheat Engine.")
+else
+  print("[MD5] Executable path detected: " .. exePath)
+
+  -- compute MD5 using certutil (built-in on Windows)
+  local safePath = exePath:gsub('"', '\\"') -- escape any internal quotes
+  local certCmd = 'certutil -hashfile "' .. safePath .. '" MD5'
+  local ch = io.popen(certCmd)
+  if not ch then
+    print("[MD5] Failed to run certutil.")
+  else
+    local out = ch:read("*a")
+    ch:close()
+    if not out or out == "" then
+      print("[MD5] certutil returned no output.")
+    else
+      -- extract the hex-looking line(s). Join all hex groups into one string
+      local hash = nil
+      for line in out:gmatch("[^\r\n]+") do
+        line = trim(line)
+        -- certutil usually prints a line composed only of hex and spaces
+        if line:match("^[0-9A-Fa-f %s]+$") then
+          -- remove spaces
+          local candidate = line:gsub("%s+", "")
+          -- candidate should be 32 hex chars for MD5
+          if #candidate == 32 and candidate:match("^%x+$") then
+            hash = candidate:upper()
+            break
+          else
+            -- sometimes certutil splits groups across several lines; accumulate
+            if not hash then hash = "" end
+            hash = hash .. candidate
+            if #hash &gt;= 32 then
+              hash = hash:sub(1,32):upper()
+              break
+            end
+          end
+        end
+      end
+
+      if not hash or #hash &lt; 32 then
+        -- attempt to find any 32-hex substring
+        local candidate = out:match("([0-9A-Fa-f]{32})")
+        if candidate then hash = candidate:upper() end
+      end
+
+      if hash and #hash == 32 then
+        print("[MD5] " .. hash)
+        -- store in a global variable for other scripts if desired
+        _G.lastExeMD5 = hash
+      else
+        print("[MD5] Could not parse MD5 from certutil output.")
+        print("[MD5] certutil output:")
+        print(out)
+      end
+    end
+  end
+end
+
+[DISABLE]
+
+-- nothing to undo
 
 </AssemblerScript>
     </CheatEntry>

@@ -29,14 +29,15 @@ An **autosplitter** automatically starts/splits/resets LiveSplit by reading the 
 Main Features:
 
 - Auto-start, auto-split and auto-reset (obviously).
-- A wide selection of split segments to choose from, including chapter completion and critical segments.
+- Customizable splits: With a wide selection of split segments to choose from, including main story and left behind chapter completion and encounters.
 - Accurate time that matches the in-game timer throughout the entire run.
 - Game-crash bullet proof: The LiveSplit timer will remain accurate even after a game crash or if the user gets out to the main menu by accident, once the run is resumed.
+- Steam and EpicGames version compatible.
 
 ## 3. Prerequisites
 
 - A Windows PC (LiveSplit is Windows-native). Some setups use Wine/Proton — outside scope.
-- A version of The Last of Us Part I compatible with this autosplitter: 1.1.4.0-Steam or 1.1.5.0-Steam.
+- A version of The Last of Us Part I compatible with this autosplitter: 1.1.4.0 Steam, 1.1.5.0 Steam/EpicGames.
 - LiveSplit (latest stable version recommended) downloaded from the <a href="https://livesplit.org/downloads/" target="_blank" rel="noopener noreferrer">official source</a>.
 - Basic familiarity with LiveSplit layout editing and splitting.
 
