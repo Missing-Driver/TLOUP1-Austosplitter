@@ -34,6 +34,9 @@ startup{
 
     // Keeps track of which checkpoints already caused a split:
     vars.splitted = new HashSet<string>();
+    // Keeps track of the time:
+    vars.previousIGT = 0;
+    vars.currentIGT = 0;
 
     // Generates a Hex string from an ulong number.
     vars.Funcs.ulongToHex = (Func<ulong, string>)((val) => {
@@ -73,9 +76,10 @@ startup{
     });
 
     // Calculates undeniably, perfectly accurate IGT (exactly as the game does):
-    vars.Funcs.getAccurateIGT = (Func<System.Diagnostics.Process, double, bool, TimeSpan>)((gameInstance, currentSegmentTime, speedrunMode) => {
+    vars.Funcs.getAccurateIGT = (Func<System.Diagnostics.Process, double, bool, int>)((gameInstance, currentSegmentTime, speedrunMode) => {
         int IGT = 0;
         double adjustedSegmentTime = currentSegmentTime;
+
         if(speedrunMode){ // Only if speedrun mode is on:
             for(int i = 0; i <= vars.nSegments; i++){ // Sum of all the segment times:
                 IGT += gameInstance.ReadValue<int>((IntPtr)(vars.timeListPointers[i]));
@@ -86,9 +90,9 @@ startup{
         IGT += (int)(adjustedSegmentTime * 1000);
         // Since the in game timer only displays hundreds of milliseconds, the game rounds the time:
         IGT = (int)(Math.Round(IGT / 100.0) * 100.0); // round to nearest 100 ms
-        // Don't ask me why it does all of this, I didn't develope the game...
-        // Returns IGT from calculated milliseconds:
-        return new TimeSpan(0, 0, 0, 0, IGT);
+
+        // Returns IGT:
+        return IGT;
     });
 
     // Checks split events:
@@ -364,12 +368,38 @@ start{
         && current.isMainMenu == 0; // and we are not in  the main menu
 }
 
+onStart{
+    vars.previousIGT = 0;
+}
+
 // Pegs the LiveSplit GameTime timer to the game's IGT.
 gameTime{
     // All this does is add the segment times from memory and the current segment time
     // if speedrun mode is on, or only the current segment time otherwise
     // (just like the in-game timer does):
-    return vars.Funcs.getAccurateIGT(game, current.segmentTime, current.isSpeedrun == 1);
+    vars.currentIGT = vars.Funcs.getAccurateIGT(game, current.segmentTime, current.isSpeedrun == 1);
+
+    // In case of an accidental quit or crash, we readjust the timer trackers:
+    if(current.isMainMenu == 1)
+        vars.previousIGT = vars.currentIGT;
+    
+    // Race condition handling.
+    // There's a rare condition where the autosplitter will hook out the values from memory just in the middle of an in-game
+    // timer update. In such state, the timer list contains the updated completion times, including the last segment
+    // just completed, but the current segment time memory value hasn't been reset to 0 yet; the timer will update with
+    // the accurate time eventually, but if a split occurs just at this very moment, the resulting split time would be
+    // way off the real time. To prevent this, we ignore abrupt jumps in time (bigger than 2.1 seconds) altogether.
+    // Why 2.1 seconds? We are considering and extreme highly unlikely scenerario where LiveSplit is running on a potato
+    // suffering from 1 second hiccups, and this check up requires 2 cicles to validate. This way, we discard false
+    // positives if the host machine is having trouble running LiveSplit:
+    if(Math.Abs(vars.currentIGT - vars.previousIGT) < 2100){ // Everything OK
+        vars.previousIGT = vars.currentIGT;
+    }
+    else{ // Abrupt jump in time detected, ignore:
+        vars.currentIGT = vars.previousIGT;
+    }
+    
+    return new TimeSpan(0, 0, 0, 0, vars.currentIGT);
 }
 
 reset{
@@ -396,4 +426,6 @@ split {
 onReset{
     // Resets the list of split segments:
     vars.splitted = new HashSet<string>();
+    // Resets time tracker:
+    vars.previousTime = 0;
 }
